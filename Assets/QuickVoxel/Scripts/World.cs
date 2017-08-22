@@ -1,13 +1,16 @@
 ﻿using UnityEngine;
 using System;
-using System.Diagnostics;
+using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
+
 
 public class World : MonoBehaviour
 {
     private bool isInitialized = false;
     public bool IsInitialized { get { return isInitialized; } }
 
+    private bool inTraversal = false;
     private bool manualTraversal = true;
     public bool ManualTraversal {  get { return manualTraversal; } }
 
@@ -54,31 +57,31 @@ public class World : MonoBehaviour
                     {
                         Stopwatch sw = new Stopwatch();
                         sw.Start();
-                        TraverseLeft();
-                        UnityEngine.Debug.Log("!!!!!!!!!!!!!!!!!!!!!!!!!! " + sw.ElapsedMilliseconds / 1000f);
+                        StartCoroutine(TraverseLeft());
+                        //UnityEngine.Debug.Log("!!!!!!!!!!!!!!!!!!!!!!!!!! " + sw.ElapsedMilliseconds / 1000f);
                     }
                     else if (Input.GetKeyUp(KeyCode.RightArrow) && width > 0)
                     {
                         Stopwatch sw = new Stopwatch();
                         sw.Start();
-                        TraverseRight();
-                        UnityEngine.Debug.Log(sw.ElapsedMilliseconds / 1000f);
+                        StartCoroutine(TraverseRight());
+                        //UnityEngine.Debug.Log(sw.ElapsedMilliseconds / 1000f);
 
                     }
                     else if (Input.GetKeyUp(KeyCode.DownArrow) && width > 0)
                     {
                         Stopwatch sw = new Stopwatch();
                         sw.Start();
-                        TraverseBack();
-                        UnityEngine.Debug.Log(sw.ElapsedMilliseconds / 1000f);
+                        StartCoroutine(TraverseBack());
+                        //UnityEngine.Debug.Log(sw.ElapsedMilliseconds / 1000f);
 
                     }
                     else if (Input.GetKeyUp(KeyCode.UpArrow) && width > 0)
                     {
                         Stopwatch sw = new Stopwatch();
                         sw.Start();
-                        TraverseForward();
-                        UnityEngine.Debug.Log(sw.ElapsedMilliseconds / 1000f);
+                        StartCoroutine(TraverseForward());
+                        //UnityEngine.Debug.Log(sw.ElapsedMilliseconds / 1000f);
 
                     }
                 }
@@ -99,22 +102,22 @@ public class World : MonoBehaviour
                     if (x < playersLastChunkPosition.x)
                     {
                         playersLastChunkPosition.x = x;
-                        TraverseLeft();
+                        StartCoroutine(TraverseLeft());
                     }
                     else if (x > playersLastChunkPosition.x)
                     {
                         playersLastChunkPosition.x = x;
-                        TraverseRight();
+                        StartCoroutine(TraverseRight());
                     }
                     else if (z < playersLastChunkPosition.y)
                     {
                         playersLastChunkPosition.y = z;
-                        TraverseBack();
+                        StartCoroutine(TraverseBack());
                     }
                     else if (z > playersLastChunkPosition.y)
                     {
                         playersLastChunkPosition.y = z;
-                        TraverseForward();
+                        StartCoroutine(TraverseForward());
                     }
                 }
             }
@@ -167,9 +170,14 @@ public class World : MonoBehaviour
     /*
      * Chunk Traversal 
      */
-    public void TraverseLeft()
+    public IEnumerator TraverseLeft()
     {
-        UnityEngine.Debug.Log("Started traversal");
+        if (inTraversal)
+        {
+            UnityEngine.Debug.Log("Already in traversal, breaking");
+            yield break;
+        }
+        inTraversal = true;
         transform.position += Vector3.left * Chunk.Width;
 
         int lastIndex = width - 1;
@@ -185,26 +193,25 @@ public class World : MonoBehaviour
                 }
             }
         }
+        yield return null;
         SetChunks(0, 0, 0, lastIndex, traversalChunks);
-        for (int j = 0; j < height; j++)
-        {
-            for (int k = 0; k < width; k++)
-            {
-                chunks[0, j, k].transform.localPosition = new Vector3(0, j * Chunk.Height, k * Chunk.Width);
-                chunks[0, j, k].GetComponent<MeshRenderer>().enabled = false;
-            }
-        }
-        SetChunkNames();
+        yield return null;
         DataGenerator.GenChunks(this, 0, 0, 0, lastIndex);
-
-        // Only once all chunks are set can I update the locality of each chunk
-        // Need to do first 2 along x-axis
+        yield return null;
         SetChunkLocality(0, 1, 0, lastIndex);
-        ChunkMeshGenerator.DrawChunks(this, 0, 1, 0, lastIndex);
-        UnityEngine.Debug.Log("Finished");
+        yield return StartCoroutine(ChunkMeshGenerator.DrawChunks(this, 0, 1, 0, lastIndex));
+        SetChunkNames();
+        inTraversal = false;
     }
-    public void TraverseRight()
+    public IEnumerator TraverseRight()
     {
+        if (inTraversal)
+        {
+            UnityEngine.Debug.Log("Already in traversal, breaking");
+            yield break;
+        }
+        inTraversal = true;
+
         transform.position += Vector3.right * Chunk.Width;
 
         int lastIndex = width - 1;
@@ -220,23 +227,25 @@ public class World : MonoBehaviour
                 }
             }
         }
+        yield return null;
         SetChunks(lastIndex, lastIndex, 0, lastIndex, traversalChunks);
-        for (int j = 0; j < height; j++)
-        {
-            for (int k = 0; k < width; k++)
-            {
-                chunks[lastIndex, j, k].transform.localPosition = new Vector3(lastIndex * Chunk.Width, j * Chunk.Height, k * Chunk.Width);
-                chunks[lastIndex, j, k].GetComponent<MeshRenderer>().enabled = false;
-            }
-        }
-        SetChunkNames();
+        yield return null;
         DataGenerator.GenChunks(this, lastIndex, lastIndex, 0, lastIndex);
-
+        yield return null;
         SetChunkLocality(lastIndex - 1, lastIndex, 0, lastIndex);
-        ChunkMeshGenerator.DrawChunks(this, lastIndex - 1, lastIndex, 0, lastIndex);
+        yield return StartCoroutine(ChunkMeshGenerator.DrawChunks(this, lastIndex - 1, lastIndex, 0, lastIndex));
+        SetChunkNames();
+        inTraversal = false;
     }
-    public void TraverseBack()
+    public IEnumerator TraverseBack()
     {
+        if (inTraversal)
+        {
+            UnityEngine.Debug.Log("Already in traversal, breaking");
+            yield break;
+        }
+        inTraversal = true;
+
         transform.position += Vector3.back * Chunk.Width;
 
         int lastIndex = width - 1;
@@ -252,23 +261,24 @@ public class World : MonoBehaviour
                 }
             }
         }
+        yield return null;
         SetChunks(0, lastIndex, 0, 0, traversalChunks);
-        for (int i = 0; i < width; i++)
-        {
-            for (int j = 0; j < height; j++)
-            {
-                chunks[i, j, 0].transform.localPosition = new Vector3(i * Chunk.Width, j * Chunk.Height, 0);
-                chunks[i, j, 0].GetComponent<MeshRenderer>().enabled = false;
-            }
-        }
-        SetChunkNames();
+        yield return null;
         DataGenerator.GenChunks(this, 0, lastIndex, 0, 0);
-
+        yield return null;
         SetChunkLocality(0, lastIndex, 0, 1);
-        ChunkMeshGenerator.DrawChunks(this, 0, lastIndex, 0, 1);
+        yield return StartCoroutine(ChunkMeshGenerator.DrawChunks(this, 0, lastIndex, 0, 1));
+        SetChunkNames();
+        inTraversal = false;
     }
-    public void TraverseForward()
+    public IEnumerator TraverseForward()
     {
+        if (inTraversal)
+        {
+            UnityEngine.Debug.Log("Already in traversal, breaking");
+            yield break;
+        }
+        inTraversal = true;
         transform.position += Vector3.forward * Chunk.Width;
 
         int lastIndex = width - 1;
@@ -284,20 +294,15 @@ public class World : MonoBehaviour
                 }
             }
         }
+        yield return null;
         SetChunks(0, lastIndex, lastIndex, lastIndex, traversalChunks);
-        for (int i = 0; i < width; i++)
-        {
-            for (int j = 0; j < height; j++)
-            {
-                chunks[i, j, lastIndex].transform.localPosition = new Vector3(i * Chunk.Width, j * Chunk.Height, lastIndex * Chunk.Width);
-                chunks[i, j, lastIndex].GetComponent<MeshRenderer>().enabled = false;
-            }
-        }
-        SetChunkNames();
+        yield return null;
         DataGenerator.GenChunks(this, 0, lastIndex, lastIndex, lastIndex);
-
+        yield return null;
         SetChunkLocality(0, lastIndex, lastIndex - 1, lastIndex);
-        ChunkMeshGenerator.DrawChunks(this, 0, lastIndex, lastIndex - 1, lastIndex);
+        yield return StartCoroutine(ChunkMeshGenerator.DrawChunks(this, 0, lastIndex, lastIndex - 1, lastIndex));
+        SetChunkNames();
+        inTraversal = false;
     }
     private Chunk[,,] GetChunks(int xMin, int xMax, int zMin, int zMax)
     {
@@ -325,6 +330,8 @@ public class World : MonoBehaviour
                 {
                     //Debug.Log(chunks[i, j, k].Name + " << " + withChunks[i - xMin, j, k - zMin].Name);
                     chunks[i, j, k] = withChunks[i - xMin, j, k - zMin];
+                    chunks[i, j, k].transform.localPosition = new Vector3(i * Chunk.Width, j * Chunk.Height, k * Chunk.Width);
+                    chunks[i, j, k].GetComponent<MeshRenderer>().enabled = false;
                 }
             }
         }
@@ -399,15 +406,14 @@ public class World : MonoBehaviour
     }
     private void SetChunkNames()
     {
-        string chunkName;
         for(int i = 0; i < width; i++)
         {
             for(int j = 0; j < height; j++)
             {
                 for(int k = 0; k < width; k++)
                 {
-                    chunkName = string.Format("Chunk ({0}, {1}, {2})", i, j, k);
-                    chunks[i, j, k].Name = chunkName;
+                    chunks[i, j, k].transform.name = string.Format("Chunk ({0}, {1}, {2})", i, j, k);
+                    chunks[i, j, k].Name = string.Format("Chunk ({0}, {1}, {2})",i, j, k);
                 }
             }
         }

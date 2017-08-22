@@ -22,51 +22,12 @@ using System;
 public static class ChunkMeshGenerator {
 
     //PreAllocated Set Deals
-    //private static Work[] alloc;
-    //private static int allocCounter;
+    //private static Work[] alloc = new Work[128];
+    //private static int allocCounter = 0;
 
     //Processing Queues
     private static Queue<Work> pendingWork = new Queue<Work>(); // For the side thread
     private static Queue<Chunk> finishedWork = new Queue<Chunk>(); // For the main, Unity thread
-    private static bool slowButSmooth = false;
-    public static bool SlowButSmooth {
-        get { return slowButSmooth; } set { slowButSmooth = value; }
-    }
-    /*
-    private static Queue<Work> pendingWork 
-    {
-        get
-        {
-            lock (lockScope)
-            {
-                return __pendingWork;
-            }
-        }
-        set
-        {
-            lock (lockScope)
-            {
-                __pendingWork = value;
-            }
-        }
-    }
-    private static Queue<Chunk> finishedWork
-    {
-        get
-        {
-            lock (lockScope)
-            {
-                return __finishedWork;
-            }
-        }
-        set
-        {
-            lock (lockScope)
-            {
-                __finishedWork = value;
-            }
-        }
-    }*/
 
     //Processing Thread
     //private static Thread genThread;
@@ -85,7 +46,7 @@ public static class ChunkMeshGenerator {
             // Removing this lock causes error
             lock (lockScope)
             {
-                if (pendingWork.Count > 0 /*&& !threadIsRunning*/)
+                if (pendingWork.Count > 0)
                 {
                     //threadIsRunning = true;
                     ThreadPool.QueueUserWorkItem(Run);
@@ -94,7 +55,6 @@ public static class ChunkMeshGenerator {
                 {
                     chunkTemp = finishedWork.Dequeue();
                     chunkTemp.SetMesh(chunkTemp.MainVUT);
-                    if(SlowButSmooth) yield return null;
                 }
             }
 
@@ -104,10 +64,23 @@ public static class ChunkMeshGenerator {
     // For the initial draw
     public static void DrawWorld(World world)
     {
-        DrawChunks(world, 0, world.Width - 1, 0, world.Width - 1);
+        //Work work = alloc[allocCounter];
+
+        // Iterate through chunks
+        for (int chunkX = 0; chunkX < world.Width; chunkX++)
+        {
+            for (int chunkY = 0; chunkY < world.Height; chunkY++)
+            {
+                for (int chunkZ = 0; chunkZ < world.Width; chunkZ++)
+                {
+                    pendingWork.Enqueue(new Work(world.chunks[chunkX, chunkY, chunkZ], Index.Zero, null));
+                }
+            }
+        }
     }
-    public static void DrawChunks(World world, int xMin, int xMax, int zMin, int zMax)
+    public static IEnumerator DrawChunks(World world, int xMin, int xMax, int zMin, int zMax)
     {
+        //Work work = alloc[allocCounter];
         // Iterate through chunks
         for (int chunkX = xMin; chunkX <= xMax; chunkX++)
         {
@@ -115,12 +88,13 @@ public static class ChunkMeshGenerator {
             {
                 for (int chunkZ = zMin; chunkZ <= zMax; chunkZ++)
                 {
-                    //Debug.Log("enqueuing work");
-                    EnqueueWork(new Work(world.chunks[chunkX, chunkY, chunkZ], Index.Zero, null));
+                    pendingWork.Enqueue(new Work(world.chunks[chunkX, chunkY, chunkZ], Index.Zero, null));
+                    yield return null;
                 }
             }
         }
     }
+
     public static void DrawChunk(Chunk chunk)
     {
         byte[,,] blocks = chunk.Blocks;
@@ -145,21 +119,6 @@ public static class ChunkMeshGenerator {
         SpitMesh(chunk);
     }
 
-    public static void AddBlock(Chunk chunk, Index blockIndex, byte block = 1)
-    {
-        chunk.Blocks[blockIndex.i, blockIndex.j, blockIndex.k] = block;
-        UpdateBlock(chunk, blockIndex);
-    }
-    // Alias for AddBlock
-    public static void EditBlock(Chunk chunk, Index blockIndex, byte block = 1)
-    {
-        AddBlock(chunk, blockIndex, block);
-    }
-    public static void RemoveBlock(Chunk chunk, Index blockIndex, byte block = 0)
-    {
-        chunk.Blocks[blockIndex.i, blockIndex.j, blockIndex.k] = block;
-        UpdateBlock(chunk, blockIndex);
-    }
     // Update vut data of block and surrounding blocks
     public static void UpdateBlock(Chunk chunk, Index blockIndex)
     {
@@ -198,102 +157,10 @@ public static class ChunkMeshGenerator {
         finishedWork.Enqueue(chunk);
     }
 
-    // Block sides is constructed in form a byte
-    private static byte GetBlockSides(Chunk chunk, int blockX, int blockY, int blockZ)
-    {
-        int lastBlockIndexXZ = Chunk.Width - 1;
-        int lastBlockIndexY = Chunk.Height - 1;
-        byte[,,] blocks = chunk.Blocks;
-        byte data = 0;
-        #region LEFT
-        if (blockX - 1 < 0)
-        {
-            if (chunk.LftChunk != null && chunk.LftChunk.Blocks[lastBlockIndexXZ, blockY, blockZ] == 0)
-            {
-                data |= 1;
-            }
-        } else if (blocks[blockX - 1, blockY, blockZ] == 0)
-        {
-            data |= 1;
-        }
-        #endregion
-        #region RIGHT
-        if(blockX + 1 > lastBlockIndexXZ)
-        {
-            if(chunk.RgtChunk != null && chunk.RgtChunk.Blocks[0, blockY, blockZ] == 0)
-            {
-                data |= 2;
-            }
-        } else if(blocks[blockX + 1, blockY, blockZ] == 0)
-        {
-            data |= 2;
-        }
-        #endregion
-        #region BOTTOM
-        if (blockY - 1 < 0)
-        {
-            if (chunk.BtmChunk != null && chunk.BtmChunk.Blocks[blockX, lastBlockIndexY, blockZ] == 0)
-            {
-                data |= 4;
-            }
-        }
-        else if (blocks[blockX, blockY - 1, blockZ] == 0)
-        {
-            data |= 4;
-        }
-        #endregion
-        #region TOP
-        if (blockY + 1 > lastBlockIndexY)
-        {
-            if (chunk.TopChunk != null && chunk.TopChunk.Blocks[blockX, 0, blockZ] == 0)
-            {
-                data |= 8;
-            }
-        }
-        else if (blocks[blockX, blockY + 1, blockZ] == 0)
-        {
-            data |= 8;
-        }
-        #endregion
-        #region BACK
-        if (blockZ - 1 < 0)
-        {
-            if (chunk.BckChunk != null && chunk.BckChunk.Blocks[blockX, blockY, lastBlockIndexXZ] == 0)
-            {
-                data |= 16;
-            }
-        }
-        else if (blocks[blockX, blockY, blockZ - 1] == 0)
-        {
-            data |= 16;
-        }
-        #endregion
-        #region FORWARD
-        if (blockZ + 1 > lastBlockIndexXZ)
-        {
-            if (chunk.FwdChunk != null && chunk.FwdChunk.Blocks[blockX, blockY, 0] == 0)
-            {
-                data |= 32;
-            }
-        }
-        else if (blocks[blockX, blockY, blockZ + 1] == 0)
-        {
-            data |= 32;
-        }
-        #endregion
-        return data;
-
-    }
-
-
     /*
      * Threading Jobs 
      */
-    public static void EnqueueWork(Work work)
-    {
-        // Access to thread
-        pendingWork.Enqueue(work);
-    }
+
 
     private static void Run(object threadContext)
     {

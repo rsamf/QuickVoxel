@@ -6,9 +6,9 @@ public struct Work
 {
     public Chunk CenterChunk { get; set; }
     public Index CenterBlockIndex { get; set; }
-    public IShape Shape { get; set; }
+    public Shape Shape { get; set; }
 
-    public Work(Chunk centerChunk, Index centerBlockIndex, IShape shape)
+    public Work(Chunk centerChunk, Index centerBlockIndex, Shape shape)
     {
         CenterChunk = centerChunk;
         CenterBlockIndex = centerBlockIndex;

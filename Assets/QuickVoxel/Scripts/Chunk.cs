@@ -50,7 +50,7 @@ public class Chunk : MonoBehaviour
         vut.ToMesh(MyMesh);
         mCollider.sharedMesh = MyMesh;
         mRenderer.enabled = true;
-        UnityEngine.Debug.Log("C " + sw.ElapsedMilliseconds / 1000f);
+        //UnityEngine.Debug.Log("C " + this.Name + " " + sw.ElapsedMilliseconds / 1000f);
     }
 
 

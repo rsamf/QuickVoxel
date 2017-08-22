@@ -34,7 +34,6 @@ public class WorldSpawner : MonoBehaviour {
         world = Instantiate(worldToSpawn, Vector3.zero, Quaternion.identity, transform).GetComponent<World>();
         // Call Initalize to create chunks
         world.Initialize(width, height, chunkToSpawn, DataGenerator.Config.Default);
-        ChunkMeshGenerator.SlowButSmooth = true;
     }
 	
 }

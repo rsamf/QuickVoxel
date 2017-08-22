@@ -1,32 +1,28 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
 
-public delegate void Action(Chunk chunk, Index blockIndex, byte byteData);
-public delegate void SideAction(Chunk chunk, Index blockIndex);
 
 public struct Process {
 
     public Index blockIndex;
-    public Action action;
     public byte byteData;
 
-    public Process(Index blockIndex, Action action, byte byteData = 0)
+    public Process(Index blockIndex, byte byteData = 0)
     {
         this.blockIndex = blockIndex;
-        this.action = action;
         this.byteData = byteData;
     }
 }
 
-public struct SideProcess
+public struct BlockLocation
 {
     public Index blockIndex;
-    public SideAction action;
+    public Chunk chunk;
 
-    public SideProcess(Index blockIndex, SideAction action)
+    public BlockLocation(Chunk chunk, Index blockIndex)
     {
+        this.chunk = chunk;
         this.blockIndex = blockIndex;
-        this.action = action;
     }
 }
 
@@ -34,34 +30,29 @@ public interface IShape
 {
     void Draw(Chunk centerChunk, Index centerOfShape);
     void Optimize();
-    void Optimize(SideAction action);
 }
 
 public class Shape : IShape
 {
     private List<Process> mainProcesses;
-    private List<SideProcess> sideProcesses;
+    private List<Index> sideProcesses;
     private static List<Chunk> chunksToBeUpdated = new List<Chunk>();
+    private static List<BlockLocation> blocksToBeUpdated = new List<BlockLocation>();
 
-    public Shape()
+
+    public Shape(byte block = 0)
     {
         mainProcesses = new List<Process>();
-        sideProcesses = new List<SideProcess>();
+        sideProcesses = new List<Index>();
+        mainProcesses.Add(new Process(Index.Zero, block));
     }
-    // Singular
-    public Shape(Action action, byte block = 0)
-    {
-        mainProcesses = new List<Process>();
-        sideProcesses = new List<SideProcess>();
 
-        mainProcesses.Add(new Process(new Index(0, 0, 0), action, block));
-    }
     public Shape(List<Process> mainProcesses)
     {
         this.mainProcesses = mainProcesses;
-        this.sideProcesses = new List<SideProcess>();
+        this.sideProcesses = new List<Index>();
     }
-    public Shape(List<Process> mainProcesses, List<SideProcess> sideProcesses)
+    public Shape(List<Process> mainProcesses, List<Index> sideProcesses)
     {
         this.mainProcesses = mainProcesses;
         this.sideProcesses = sideProcesses;
@@ -79,13 +70,13 @@ public class Shape : IShape
             NormalizeLocation(out targetChunk, ref blockIndex, centerChunk);
             if(targetChunk != null)
             {
-                AddIfNotInList(targetChunk, chunksToBeUpdated);
-                main.action(targetChunk, blockIndex, main.byteData);
+                targetChunk.Blocks[blockIndex.i, blockIndex.j, blockIndex.k] = main.byteData;
+                addToBeingUpdated(targetChunk, blockIndex);
             }
         }
-        foreach (SideProcess side in sideProcesses)
+        foreach (Index sideIndex in sideProcesses)
         {
-            Index relativeIndex = side.blockIndex;
+            Index relativeIndex = sideIndex;
             Chunk targetChunk;
             Index blockIndex = new Index(
                 centerBlockIndex.i + relativeIndex.i, centerBlockIndex.j + relativeIndex.j, centerBlockIndex.k + relativeIndex.k
@@ -93,23 +84,30 @@ public class Shape : IShape
             NormalizeLocation(out targetChunk, ref blockIndex, centerChunk);
             if (targetChunk != null)
             {
-                AddIfNotInList(targetChunk, chunksToBeUpdated);
-                side.action(targetChunk, blockIndex);
+                addToBeingUpdated(targetChunk, blockIndex);
             }
         }
-        foreach(Chunk chunkToBeUpdated in chunksToBeUpdated)
+        foreach(BlockLocation targetBlock in blocksToBeUpdated)
         {
-            ChunkMeshGenerator.SpitMesh(chunkToBeUpdated);
+            ChunkMeshGenerator.UpdateBlock(targetBlock.chunk, targetBlock.blockIndex);
+        }
+        foreach(Chunk targetChunk in chunksToBeUpdated)
+        {
+            ChunkMeshGenerator.SpitMesh(targetChunk);
+            //Debug.Log("updated chunk " + targetChunk.Name);
         }
         chunksToBeUpdated.Clear();
+        blocksToBeUpdated.Clear();
     }
-    // Optimize the side processes with default action of updates
-    public void Optimize()
+    private void addToBeingUpdated(Chunk chunk, Index blockIndex)
     {
-        Optimize(ChunkMeshGenerator.UpdateBlock);
+        //Debug.Log("Attempting to add chunk " + chunk.Name);
+        AddIfNotInList(chunk, chunksToBeUpdated);
+        blocksToBeUpdated.Add(new BlockLocation(chunk, blockIndex));
     }
+
     // Optimize the side processes for the least steps possible
-    public void Optimize(SideAction action)
+    public void Optimize()
     {
         List<Index> sideBlockIndicees = new List<Index>();
         List<Index> mainBlockIndicees = new List<Index>();
@@ -145,42 +143,49 @@ public class Shape : IShape
         sideProcesses.Clear();
         foreach (Index index in sideBlockIndicees)
         {
-            sideProcesses.Add(new SideProcess(index, action));
+            sideProcesses.Add(index);
         }
     }
 
     private static void NormalizeLocation(out Chunk chunk, ref Index blockIndex, Chunk centerChunk)
     {
         chunk = centerChunk;
+        /*
+        bool isLeft = blockIndex.i < 0;
+        bool isRight = blockIndex.i >= Chunk.Width;
+        bool isBottom = blockIndex.j < 0;
+        bool isTop = blockIndex.j >= Chunk.Height;
+        bool isBack = blockIndex.k < 0;
+        bool isForward = blockIndex.k >= Chunk.Width;
+        */
         if (blockIndex.i < 0)
         {
-            chunk = centerChunk.LftChunk;
+            chunk = chunk.LftChunk;
             blockIndex.i = (blockIndex.i % Chunk.Width) + Chunk.Width;
         }
         else if (blockIndex.i >= Chunk.Width)
         {
-            chunk = centerChunk.RgtChunk;
+            chunk = chunk.RgtChunk;
             blockIndex.i %= Chunk.Width;
         }
         if (blockIndex.j < 0)
         {
-            chunk = centerChunk.BtmChunk;
+            chunk = chunk.BtmChunk;
             blockIndex.j = (blockIndex.j % Chunk.Height) + Chunk.Height;
-
         }
         else if (blockIndex.j >= Chunk.Height)
         {
-            chunk = centerChunk.TopChunk;
+            chunk = chunk.TopChunk;
             blockIndex.j %= Chunk.Height;
         }
         if (blockIndex.k < 0)
         {
-            chunk = centerChunk.BckChunk;
+            chunk = chunk.BckChunk;
             blockIndex.k = (blockIndex.k % Chunk.Width) + Chunk.Width;
         }
         else if (blockIndex.k >= Chunk.Width)
         {
-            chunk = centerChunk.FwdChunk;
+            chunk = chunk.FwdChunk;
             blockIndex.k %= Chunk.Width;
         }
 
@@ -193,6 +198,7 @@ public class Shape : IShape
             if (!list.Contains(data) && (list2 == null || (list2 != null && !list2.Contains(data))))
             {
                 list.Add(data);
+                //Debug.Log("Successfully added " + data);
             }
         }
     }
